@@ -5,5 +5,6 @@
 	"minAppVersion": "1.10.0",
 	"description": "Adds a multi-view calendar layout to Obsidian Bases with Google Calendar colors and timed events.",
 	"author": "mtellin",
+	"authorUrl": "https://github.com/mtellin",
 	"isDesktopOnly": false
 }
