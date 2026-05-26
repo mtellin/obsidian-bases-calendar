@@ -1,0 +1,14 @@
+filters:
+  and:
+    - file.hasTag("event")
+views:
+  - type: calendar
+    name: Calendar
+    order:
+      - file.name
+      - tags
+      - location
+    startDate: note.date
+    endDate: note.endDate
+    colorProperty: note.color
+    weekStartDay: monday
