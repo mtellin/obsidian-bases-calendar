@@ -2,6 +2,11 @@
 
 A calendar view for [Obsidian Bases](https://obsidian.md/bases) that displays your notes on an interactive calendar with multiple time views, Google Calendar–style event colors, and support for timed events.
 
+> [!NOTE]
+> This is a 100% vibe-coded plugin built for personal use. It is shared in
+> case it is useful to others, but it is not a polished or actively maintained
+> product. If you run into a problem, open an issue and I can try to address it.
+
 > **Requires Obsidian 1.10 or later** (the version that introduced Bases).
 
 ---
@@ -20,7 +25,20 @@ A calendar view for [Obsidian Bases](https://obsidian.md/bases) that displays yo
 
 ## Installation
 
-This plugin is not yet listed in the Obsidian community plugin directory. Install it manually:
+This plugin is not listed in the Obsidian community plugin directory. Install it via BRAT (recommended) or manually.
+
+### Via BRAT (recommended)
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) lets you install and auto-update plugins directly from GitHub.
+
+1. Install the **Obsidian42 - BRAT** plugin from the Obsidian community plugins directory.
+2. Open BRAT settings → **Add Beta plugin**.
+3. Paste `mtellin/obsidian-bases-calendar` and click **Add Plugin**.
+4. Enable **Bases Calendar** in **Settings → Community plugins**.
+
+BRAT will notify you when new releases are available.
+
+### Manual install
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](../../releases/latest).
 2. In your vault, create the folder `.obsidian/plugins/bases-calendar/`.
