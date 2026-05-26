@@ -10,10 +10,12 @@ import interactionPlugin from "@fullcalendar/interaction";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { BasesEntry, BasesPropertyId, DateValue, Value } from "obsidian";
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarEntry } from "./calendar-view";
 import { useApp } from "./hooks";
+
+const ZOOM_LEVELS = ["01:00:00", "00:30:00", "00:15:00"] as const;
 
 export interface CalendarHandle {
   updateSize(): void;
@@ -23,10 +25,12 @@ interface CalendarReactViewProps {
   entries: CalendarEntry[];
   weekStartDay: number;
   initialView: string;
+  initialSlotDuration: string;
   scrollToTime: string;
   detailProperty: BasesPropertyId | null;
   properties: BasesPropertyId[];
   onViewChange: (view: string) => void;
+  onZoomChange: (slotDuration: string) => void;
   onEntryClick: (entry: BasesEntry, isModEvent: boolean) => void;
   onEntryContextMenu: (evt: React.MouseEvent, entry: BasesEntry) => void;
   onEventDrop?: (
@@ -43,10 +47,12 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
   entries,
   weekStartDay,
   initialView,
+  initialSlotDuration,
   scrollToTime,
   detailProperty,
   properties,
   onViewChange,
+  onZoomChange,
   onEntryClick,
   onEntryContextMenu,
   onEventDrop,
@@ -55,8 +61,32 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 }) => {
   const app = useApp();
   const calendarRef = useRef<FullCalendar>(null);
+  const [slotDuration, setSlotDuration] = useState(initialSlotDuration);
+  const slotDurationRef = useRef(initialSlotDuration);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hoverParentRef = useRef<{ hoverPopover: any }>({ hoverPopover: null });
+
+  const handleZoom = useCallback(
+    (direction: "in" | "out") => {
+      const currentIdx = ZOOM_LEVELS.indexOf(slotDurationRef.current as typeof ZOOM_LEVELS[number]);
+      const nextIdx = direction === "in"
+        ? Math.min(currentIdx + 1, ZOOM_LEVELS.length - 1)
+        : Math.max(currentIdx - 1, 0);
+      const next = ZOOM_LEVELS[nextIdx];
+      slotDurationRef.current = next;
+      setSlotDuration(next);
+      onZoomChange(next);
+    },
+    [onZoomChange],
+  );
+
+  const customButtons = useMemo(
+    () => ({
+      zoomIn:  { text: "+", hint: "Zoom in",  click: () => handleZoom("in") },
+      zoomOut: { text: "−", hint: "Zoom out", click: () => handleZoom("out") },
+    }),
+    [handleZoom],
+  );
 
   useEffect(() => {
     if (calendarHandleRef) {
@@ -286,6 +316,14 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 
       const entry = eventInfo.event.extendedProps.entry as BasesEntry;
 
+      // Skip detail row for short timed events (≤20 min) to avoid overflow.
+      const { start, end, allDay } = eventInfo.event;
+      const isShortTimed =
+        !allDay &&
+        start !== null &&
+        end !== null &&
+        end.getTime() - start.getTime() <= 20 * 60 * 1000;
+
       // Title: first valid property from order (or file basename fallback).
       const validProperties: { propertyId: BasesPropertyId; value: Value }[] = [];
       for (const prop of properties) {
@@ -298,7 +336,9 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 
       // Detail line: use detailProperty if configured, otherwise remaining order props.
       let detailNode: React.ReactNode = null;
-      if (detailProperty) {
+      if (isShortTimed) {
+        detailNode = null;
+      } else if (detailProperty) {
         const detailValue = tryGetValue(entry, detailProperty);
         if (detailValue && hasNonEmptyValue(detailValue)) {
           detailNode = (
@@ -375,11 +415,14 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       headerToolbar={{
         left: "title",
         center: "",
-        right: "dayGridMonth,timeGridWeek,workWeek,threeDay,timeGridDay prev,today,next",
+        right: "dayGridMonth,timeGridWeek,workWeek,threeDay,timeGridDay prev,today,next zoomOut,zoomIn",
       }}
+      customButtons={customButtons}
       buttonText={{ today: "Today" }}
       nowIndicator={true}
       scrollTime={scrollToTime}
+      slotDuration={slotDuration}
+      eventMinHeight={20}
       navLinks={false}
       events={events}
       eventContent={renderEventContent}

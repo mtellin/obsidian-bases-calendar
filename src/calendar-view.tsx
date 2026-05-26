@@ -40,6 +40,7 @@ export class CalendarView extends BasesView {
   private weekStartDay: number = 1;
   private scrollToTime: string = "08:00:00";
   private currentView: string = "workWeek";
+  private slotDuration: string = "00:30:00";
 
   constructor(controller: QueryController, scrollEl: HTMLElement) {
     super(controller);
@@ -75,16 +76,15 @@ export class CalendarView extends BasesView {
   }
 
   public setEphemeralState(state: unknown): void {
-    if (state && typeof state === "object" && "currentView" in state) {
-      const s = state as { currentView: string };
-      if (typeof s.currentView === "string") {
-        this.currentView = s.currentView;
-      }
+    if (state && typeof state === "object") {
+      const s = state as Record<string, unknown>;
+      if (typeof s.currentView === "string") this.currentView = s.currentView;
+      if (typeof s.slotDuration === "string") this.slotDuration = s.slotDuration;
     }
   }
 
   public getEphemeralState(): unknown {
-    return { currentView: this.currentView };
+    return { currentView: this.currentView, slotDuration: this.slotDuration };
   }
 
   private loadConfig(): void {
@@ -162,10 +162,12 @@ export class CalendarView extends BasesView {
             entries={this.entries}
             weekStartDay={this.weekStartDay}
             initialView={this.currentView}
+            initialSlotDuration={this.slotDuration}
             scrollToTime={this.scrollToTime}
             detailProperty={this.detailProp}
             properties={this.config.getOrder() || []}
             onViewChange={(view) => { this.currentView = view; }}
+            onZoomChange={(dur) => { this.slotDuration = dur; }}
             onEntryClick={(entry, isModEvent) => {
               void this.app.workspace.openLinkText(
                 entry.file.path,

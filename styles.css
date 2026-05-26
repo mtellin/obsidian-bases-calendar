@@ -266,10 +266,22 @@ body {
 
   .fc-timegrid-event {
     border-radius: 3px !important;
+    overflow: hidden !important;
+  }
+
+  .fc-timegrid-event .fc-event-main {
+    overflow: hidden !important;
   }
 
   .fc-timegrid-col {
     background-color: var(--background-primary) !important;
+  }
+
+  /* Zoom buttons — slightly wider so +/− glyphs don't feel cramped */
+  .fc-zoomIn-button,
+  .fc-zoomOut-button {
+    min-width: 28px !important;
+    font-size: var(--font-ui-medium) !important;
   }
 }
 
