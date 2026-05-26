@@ -7,6 +7,8 @@ A calendar view for [Obsidian Bases](https://obsidian.md/bases) that displays yo
 > case it is useful to others, but it is not a polished or actively maintained
 > product. If you run into a problem, open an issue and I can try to address it.
 
+![Bases Calendar showing a work-week view with colored events](docs/preview.png)
+
 > **Requires Obsidian 1.10 or later** (the version that introduced Bases).
 
 ---
