@@ -1,7 +1,7 @@
 # Bases Calendar — Claude Instructions
 
-Git conventions (commit format, branching, semver tagging) are defined in the
-parent `~/Documents/git/CLAUDE.md` and apply here.
+Git conventions (commit format, branching, semver tagging) follow Conventional
+Commits — see commit history for examples.
 
 ## Project overview
 
