@@ -12,37 +12,34 @@ export const GOOGLE_CALENDAR_COLORS: Record<string, string> = {
   tomato: "#D50000",
 };
 
-// Returns white or black text based on background luminance.
-export function contrastColor(hex: string): string {
+function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  // Relative luminance (sRGB)
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5 ? "#000000" : "#ffffff";
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Accepts a Google color name (case-insensitive), a raw #hex, or null/undefined.
-// Returns { backgroundColor, borderColor, textColor } or null.
+// Accepts a Google color name (case-insensitive) or a raw #hex.
+// Returns a low-opacity background tint + full-opacity border so colors read
+// as a subtle hint rather than a bold fill. Text uses the theme default.
 export function resolveColor(
   raw: unknown,
-): { backgroundColor: string; borderColor: string; textColor: string } | null {
+): { backgroundColor: string; borderColor: string } | null {
   if (raw == null) return null;
   const str = String(raw).trim().toLowerCase();
   if (!str) return null;
 
-  let bg: string | undefined;
+  let solid: string | undefined;
 
   if (GOOGLE_CALENDAR_COLORS[str]) {
-    bg = GOOGLE_CALENDAR_COLORS[str];
+    solid = GOOGLE_CALENDAR_COLORS[str];
   } else if (/^#[0-9a-f]{6}$/i.test(str)) {
-    bg = str.toUpperCase();
+    solid = str.toUpperCase();
   }
 
-  if (!bg) return null;
+  if (!solid) return null;
   return {
-    backgroundColor: bg,
-    borderColor: bg,
-    textColor: contrastColor(bg),
+    backgroundColor: hexToRgba(solid, 0.18),
+    borderColor: solid,
   };
 }

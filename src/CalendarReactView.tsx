@@ -24,6 +24,7 @@ interface CalendarReactViewProps {
   weekStartDay: number;
   initialView: string;
   scrollToTime: string;
+  detailProperty: BasesPropertyId | null;
   properties: BasesPropertyId[];
   onViewChange: (view: string) => void;
   onEntryClick: (entry: BasesEntry, isModEvent: boolean) => void;
@@ -43,6 +44,7 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
   weekStartDay,
   initialView,
   scrollToTime,
+  detailProperty,
   properties,
   onViewChange,
   onEntryClick,
@@ -99,7 +101,6 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       allDay: calEntry.allDay,
       backgroundColor: calEntry.backgroundColor,
       borderColor: calEntry.borderColor,
-      textColor: calEntry.textColor,
       extendedProps: {
         entry: calEntry.entry,
         originalEndDate: calEntry.endDate,
@@ -207,21 +208,15 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
     return Boolean(str && str.trim().length > 0);
   }, []);
 
-  // Renders a single property value. For list values with >2 items (e.g. 5-7 people),
-  // shows the first 2 items as plain text + a "+N more" badge. For ≤2 items or
-  // non-list values, delegates to Obsidian's renderTo for rich formatting (links, chips).
-  const CompactPropertyValue: React.FC<{ value: Value; maxItems?: number }> = ({
+  // Renders a property value with list-aware truncation.
+  // Uses Obsidian's renderTo for rich DOM output, then counts the actual child nodes
+  // (individual chips/links) to decide truncation — more reliable than string splitting
+  // since we don't know the exact separator Obsidian uses for multi-select values.
+  const ListPropertyValue: React.FC<{ value: Value; maxItems?: number }> = ({
     value,
     maxItems = 2,
   }) => {
-    const raw = value instanceof DateValue ? "" : value.toString();
-    // Split on comma separators; handles "Alice, Bob, Carol" and "Alice,Bob"
-    const listItems = raw
-      ? raw.split(/,\s*|\n/).map((s) => s.trim()).filter(Boolean)
-      : [];
-    const isLongList = listItems.length > maxItems;
-
-    const richRef = useCallback(
+    const nodeRef = useCallback(
       (node: HTMLElement | null) => {
         if (!node || !app) return;
         while (node.firstChild) node.removeChild(node.firstChild);
@@ -239,27 +234,50 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
           return;
         }
 
-        if (!isLongList) {
-          // Few enough items — use Obsidian's renderer for links/chips
-          value.renderTo(node, app.renderContext);
-        } else {
-          // Too many — render first maxItems as plain truncated text
+        // Render into a detached temp element so we can inspect the output.
+        const temp = document.createElement("span");
+        value.renderTo(temp, app.renderContext);
+        const children = Array.from(temp.childNodes);
+
+        // If Obsidian emitted a single text node, try splitting it by commas to
+        // get a meaningful item count (handles "Alice, Bob, Carol" flat strings).
+        let effectiveCount = children.length;
+        let splitItems: string[] | null = null;
+        if (children.length === 1 && children[0].nodeType === Node.TEXT_NODE) {
+          const parts = (children[0].textContent ?? "")
+            .split(/,\s*/)
+            .map((s: string) => s.trim())
+            .filter(Boolean);
+          if (parts.length > 1) {
+            effectiveCount = parts.length;
+            splitItems = parts;
+          }
+        }
+
+        if (effectiveCount <= maxItems) {
+          // Few items — move rendered children directly into the target node.
+          while (temp.firstChild) node.appendChild(temp.firstChild);
+        } else if (splitItems) {
+          // Was a single text node that we split — render truncated plain text.
           node.appendChild(
-            document.createTextNode(listItems.slice(0, maxItems).join(", ")),
+            document.createTextNode(splitItems.slice(0, maxItems).join(", ")),
           );
+          const badge = document.createElement("span");
+          badge.className = "bases-calendar-prop-overflow";
+          badge.textContent = `+${effectiveCount - maxItems}`;
+          node.appendChild(badge);
+        } else {
+          // Multiple child nodes (chips/links) — move first maxItems, then badge.
+          children.slice(0, maxItems).forEach((child) => node.appendChild(child));
+          const badge = document.createElement("span");
+          badge.className = "bases-calendar-prop-overflow";
+          badge.textContent = `+${effectiveCount - maxItems}`;
+          node.appendChild(badge);
         }
       },
-      [value, isLongList],
+      [value],
     );
-
-    return (
-      <span className="bases-calendar-prop-list">
-        <span ref={richRef} />
-        {isLongList && (
-          <span className="bases-calendar-prop-overflow">+{listItems.length - maxItems}</span>
-        )}
-      </span>
-    );
+    return <span className="bases-calendar-prop-list" ref={nodeRef} />;
   };
 
   const renderEventContent = useCallback(
@@ -267,6 +285,8 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       if (!app) return null;
 
       const entry = eventInfo.event.extendedProps.entry as BasesEntry;
+
+      // Title: first valid property from order (or file basename fallback).
       const validProperties: { propertyId: BasesPropertyId; value: Value }[] = [];
       for (const prop of properties) {
         const value = tryGetValue(entry, prop);
@@ -274,36 +294,52 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
           validProperties.push({ propertyId: prop, value });
         }
       }
+      const titleProp = validProperties[0];
 
-      if (validProperties.length > 0) {
-        const [first, ...rest] = validProperties;
-        return (
-          <div className="bases-calendar-event-content">
-            <div className="bases-calendar-event-title">
-              <CompactPropertyValue value={first.value} />
+      // Detail line: use detailProperty if configured, otherwise remaining order props.
+      let detailNode: React.ReactNode = null;
+      if (detailProperty) {
+        const detailValue = tryGetValue(entry, detailProperty);
+        if (detailValue && hasNonEmptyValue(detailValue)) {
+          detailNode = (
+            <div className="bases-calendar-event-property">
+              <span className="bases-calendar-event-property-value">
+                <ListPropertyValue value={detailValue} />
+              </span>
             </div>
-            {rest.length > 0 && (
-              <div className="bases-calendar-event-properties">
-                {rest.map(({ propertyId: prop, value }) => (
-                  <div key={prop} className="bases-calendar-event-property">
-                    <span className="bases-calendar-event-property-value">
-                      <CompactPropertyValue value={value} />
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
+          );
+        }
+      } else {
+        const restProps = validProperties.slice(1);
+        if (restProps.length > 0) {
+          detailNode = (
+            <>
+              {restProps.map(({ propertyId: prop, value }) => (
+                <div key={prop} className="bases-calendar-event-property">
+                  <span className="bases-calendar-event-property-value">
+                    <ListPropertyValue value={value} />
+                  </span>
+                </div>
+              ))}
+            </>
+          );
+        }
       }
 
       return (
         <div className="bases-calendar-event-content">
-          <div className="bases-calendar-event-title">{entry.file.basename}</div>
+          <div className="bases-calendar-event-title">
+            {titleProp
+              ? <ListPropertyValue value={titleProp.value} maxItems={1} />
+              : entry.file.basename}
+          </div>
+          {detailNode && (
+            <div className="bases-calendar-event-properties">{detailNode}</div>
+          )}
         </div>
       );
     },
-    [properties, app, hasNonEmptyValue],
+    [properties, detailProperty, app, hasNonEmptyValue],
   );
 
   const handleViewDidMount = useCallback(
@@ -319,7 +355,9 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
       initialView={initialView}
       views={{
-        dayGridMonth: {},
+        // Month auto-sizes to show all week rows (no inner scroll needed).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        dayGridMonth: { contentHeight: "auto" } as any,
         timeGridWeek: {},
         workWeek: {
           type: "timeGridWeek",
@@ -349,7 +387,7 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       eventMouseEnter={handleEventMouseEnter}
       eventDrop={(info) => void handleEventDrop(info)}
       viewDidMount={handleViewDidMount}
-      height="auto"
+      height="100%"
       fixedWeekCount={false}
       fixedMirrorParent={document.body ?? undefined}
       eventDurationEditable={false}

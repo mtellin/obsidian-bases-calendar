@@ -16,6 +16,20 @@ body {
   font-size: var(--font-ui-medium);
 }
 
+/* Standalone bases pane: fill the available pane height so FullCalendar's
+   height="100%" has a measured parent and scrollTime can take effect. */
+.bases-calendar-container {
+  height: 100%;
+  min-height: 500px;
+}
+
+/* Embedded in a markdown note: parent has no intrinsic height, so use the
+   CSS variable (default 600px) to give the container a defined size. */
+.markdown-rendered .bases-calendar-container {
+  height: var(--calendar-embed-height, 600px);
+  min-height: unset;
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Embedded preflight — resets Obsidian/theme table styles that leak into the
  * FullCalendar <table> when it's inside .markdown-rendered.
@@ -221,7 +235,7 @@ body {
   }
 
   .fc-event-title-container {
-    color: var(--text-normal) !important;
+    color: var(--text-normal);
   }
 
   /* ── timeGrid-specific ──────────────────────────────────────────────────── */

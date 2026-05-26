@@ -23,7 +23,6 @@ export interface CalendarEntry {
   allDay: boolean;
   backgroundColor?: string;
   borderColor?: string;
-  textColor?: string;
 }
 
 export class CalendarView extends BasesView {
@@ -37,6 +36,7 @@ export class CalendarView extends BasesView {
   private startDateProp: BasesPropertyId | null = null;
   private endDateProp: BasesPropertyId | null = null;
   private colorProp: BasesPropertyId | null = null;
+  private detailProp: BasesPropertyId | null = null;
   private weekStartDay: number = 1;
   private scrollToTime: string = "08:00:00";
   private currentView: string = "workWeek";
@@ -91,6 +91,7 @@ export class CalendarView extends BasesView {
     this.startDateProp = this.config.getAsPropertyId("startDate");
     this.endDateProp = this.config.getAsPropertyId("endDate");
     this.colorProp = this.config.getAsPropertyId("colorProperty");
+    this.detailProp = this.config.getAsPropertyId("detailProperty");
 
     const weekStartDayValue = this.config.get("weekStartDay") as string;
     const dayNameToNumber: Record<string, number> = {
@@ -123,7 +124,7 @@ export class CalendarView extends BasesView {
           ? (this.extractDate(entry, this.endDateProp)?.date ?? undefined)
           : undefined;
 
-        let colorProps: Pick<CalendarEntry, "backgroundColor" | "borderColor" | "textColor"> = {};
+        let colorProps: Pick<CalendarEntry, "backgroundColor" | "borderColor"> = {};
         if (this.colorProp) {
           try {
             const colorValue = entry.getValue(this.colorProp);
@@ -162,6 +163,7 @@ export class CalendarView extends BasesView {
             weekStartDay={this.weekStartDay}
             initialView={this.currentView}
             scrollToTime={this.scrollToTime}
+            detailProperty={this.detailProp}
             properties={this.config.getOrder() || []}
             onViewChange={(view) => { this.currentView = view; }}
             onEntryClick={(entry, isModEvent) => {
@@ -289,9 +291,15 @@ export class CalendarView extends BasesView {
         ],
       },
       {
-        displayName: "Color",
+        displayName: "Event display",
         type: "group",
         items: [
+          {
+            displayName: "Detail property",
+            type: "property",
+            key: "detailProperty",
+            placeholder: "Property shown on 2nd line (e.g. people)",
+          },
           {
             displayName: "Color property",
             type: "property",
