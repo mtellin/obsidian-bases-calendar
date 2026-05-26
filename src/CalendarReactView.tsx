@@ -23,6 +23,7 @@ interface CalendarReactViewProps {
   entries: CalendarEntry[];
   weekStartDay: number;
   initialView: string;
+  scrollToTime: string;
   properties: BasesPropertyId[];
   onViewChange: (view: string) => void;
   onEntryClick: (entry: BasesEntry, isModEvent: boolean) => void;
@@ -41,6 +42,7 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
   entries,
   weekStartDay,
   initialView,
+  scrollToTime,
   properties,
   onViewChange,
   onEntryClick,
@@ -205,29 +207,59 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
     return Boolean(str && str.trim().length > 0);
   }, []);
 
-  const PropertyValue: React.FC<{ value: Value }> = ({ value }) => {
-    const elementRef = useCallback(
+  // Renders a single property value. For list values with >2 items (e.g. 5-7 people),
+  // shows the first 2 items as plain text + a "+N more" badge. For ≤2 items or
+  // non-list values, delegates to Obsidian's renderTo for rich formatting (links, chips).
+  const CompactPropertyValue: React.FC<{ value: Value; maxItems?: number }> = ({
+    value,
+    maxItems = 2,
+  }) => {
+    const raw = value instanceof DateValue ? "" : value.toString();
+    // Split on comma separators; handles "Alice, Bob, Carol" and "Alice,Bob"
+    const listItems = raw
+      ? raw.split(/,\s*|\n/).map((s) => s.trim()).filter(Boolean)
+      : [];
+    const isLongList = listItems.length > maxItems;
+
+    const richRef = useCallback(
       (node: HTMLElement | null) => {
-        if (node && app) {
-          while (node.firstChild) node.removeChild(node.firstChild);
+        if (!node || !app) return;
+        while (node.firstChild) node.removeChild(node.firstChild);
 
-          if (!(value instanceof DateValue)) {
-            value.renderTo(node, app.renderContext);
-            return;
-          }
-
+        if (value instanceof DateValue) {
           if ("date" in value && value.date && value.date instanceof Date) {
             const opts: Intl.DateTimeFormatOptions =
               "time" in value && (value as { time?: unknown }).time
                 ? { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }
                 : { year: "numeric", month: "short", day: "numeric" };
-            node.appendChild(document.createTextNode(value.date.toLocaleDateString(undefined, opts)));
+            node.appendChild(
+              document.createTextNode(value.date.toLocaleDateString(undefined, opts)),
+            );
           }
+          return;
+        }
+
+        if (!isLongList) {
+          // Few enough items — use Obsidian's renderer for links/chips
+          value.renderTo(node, app.renderContext);
+        } else {
+          // Too many — render first maxItems as plain truncated text
+          node.appendChild(
+            document.createTextNode(listItems.slice(0, maxItems).join(", ")),
+          );
         }
       },
-      [value],
+      [value, isLongList],
     );
-    return <span ref={elementRef} />;
+
+    return (
+      <span className="bases-calendar-prop-list">
+        <span ref={richRef} />
+        {isLongList && (
+          <span className="bases-calendar-prop-overflow">+{listItems.length - maxItems}</span>
+        )}
+      </span>
+    );
   };
 
   const renderEventContent = useCallback(
@@ -248,14 +280,14 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
         return (
           <div className="bases-calendar-event-content">
             <div className="bases-calendar-event-title">
-              <PropertyValue value={first.value} />
+              <CompactPropertyValue value={first.value} />
             </div>
             {rest.length > 0 && (
               <div className="bases-calendar-event-properties">
                 {rest.map(({ propertyId: prop, value }) => (
                   <div key={prop} className="bases-calendar-event-property">
                     <span className="bases-calendar-event-property-value">
-                      <PropertyValue value={value} />
+                      <CompactPropertyValue value={value} />
                     </span>
                   </div>
                 ))}
@@ -309,6 +341,7 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       }}
       buttonText={{ today: "Today" }}
       nowIndicator={true}
+      scrollTime={scrollToTime}
       navLinks={false}
       events={events}
       eventContent={renderEventContent}

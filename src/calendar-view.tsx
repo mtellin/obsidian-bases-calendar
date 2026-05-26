@@ -38,6 +38,7 @@ export class CalendarView extends BasesView {
   private endDateProp: BasesPropertyId | null = null;
   private colorProp: BasesPropertyId | null = null;
   private weekStartDay: number = 1;
+  private scrollToTime: string = "08:00:00";
   private currentView: string = "workWeek";
 
   constructor(controller: QueryController, scrollEl: HTMLElement) {
@@ -99,6 +100,9 @@ export class CalendarView extends BasesView {
     this.weekStartDay = weekStartDayValue
       ? (dayNameToNumber[weekStartDayValue] ?? 1)
       : 1;
+
+    const scrollTimeValue = this.config.get("scrollToTime") as string;
+    this.scrollToTime = scrollTimeValue || "08:00:00";
   }
 
   private updateCalendar(): void {
@@ -157,6 +161,7 @@ export class CalendarView extends BasesView {
             entries={this.entries}
             weekStartDay={this.weekStartDay}
             initialView={this.currentView}
+            scrollToTime={this.scrollToTime}
             properties={this.config.getOrder() || []}
             onViewChange={(view) => { this.currentView = view; }}
             onEntryClick={(entry, isModEvent) => {
@@ -312,6 +317,20 @@ export class CalendarView extends BasesView {
               thursday: "Thursday",
               friday: "Friday",
               saturday: "Saturday",
+            },
+          },
+          {
+            displayName: "Day starts at",
+            type: "dropdown",
+            key: "scrollToTime",
+            default: "08:00:00",
+            options: {
+              "00:00:00": "Midnight",
+              "06:00:00": "6:00 AM",
+              "07:00:00": "7:00 AM",
+              "08:00:00": "8:00 AM",
+              "09:00:00": "9:00 AM",
+              "10:00:00": "10:00 AM",
             },
           },
         ],

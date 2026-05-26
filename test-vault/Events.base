@@ -6,9 +6,9 @@ views:
     name: Calendar
     order:
       - file.name
-      - tags
-      - location
+      - note.people
     startDate: note.date
     endDate: note.endDate
     colorProperty: note.color
     weekStartDay: monday
+    scrollToTime: "08:00:00"
