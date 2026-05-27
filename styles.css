@@ -273,6 +273,12 @@ body {
     overflow: hidden !important;
   }
 
+  .fc-timegrid-event .fc-event-main-frame {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
   .fc-timegrid-col {
     background-color: var(--background-primary) !important;
   }
@@ -290,14 +296,22 @@ body {
   font-size: var(--font-ui-smaller);
   color: var(--text-normal);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .bases-calendar-event-title {
+  display: block;
   font-weight: var(--font-semibold);
   margin-bottom: 2px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.bases-calendar-event-title > * {
+  max-width: 100%;
 }
 
 .bases-calendar-event-properties {
@@ -318,6 +332,7 @@ body {
 .bases-calendar-event-property-value {
   overflow: hidden;
   min-width: 0;
+  max-width: 100%;
 }
 
 /* List value container: inline so the +N badge sits right after the text */
@@ -325,6 +340,7 @@ body {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
