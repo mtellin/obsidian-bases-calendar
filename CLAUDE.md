@@ -96,11 +96,17 @@ Available option types in `BasesAllOptions`: `property`, `dropdown`, `text`, `gr
 ## Making a BRAT release
 
 BRAT installs by downloading the three built artifacts from the latest GitHub
-release. Steps:
+release. A pushed Git tag is not enough; GitHub must also have a published
+Release for that tag with plugin assets attached.
 
-1. **Bump versions** in `manifest.json`, `package.json`, and `versions.json`.
+Steps:
+
+1. **Bump versions** in `manifest.json`, `package.json`, `package-lock.json`,
+   and `versions.json`.
    - `manifest.json`: update `"version"`
    - `package.json`: update `"version"`
+   - `package-lock.json`: update the top-level `"version"` and
+     `packages[""].version`
    - `versions.json`: add an entry mapping the new version → minimum Obsidian version
      (usually keep the same `"1.10.0"` unless the plugin now requires a newer app)
 
@@ -112,9 +118,9 @@ release. Steps:
 
 3. **Commit and tag**:
    ```bash
-   git add manifest.json package.json versions.json
+   git add manifest.json package.json package-lock.json versions.json styles.css
    git commit -m "chore: bump version to vX.Y.Z"
-   git tag vX.Y.Z
+   git tag -a vX.Y.Z -m "vX.Y.Z"
    git push && git push origin vX.Y.Z
    ```
 
@@ -123,12 +129,19 @@ release. Steps:
    gh release create vX.Y.Z \
      main.js manifest.json styles.css \
      --title "vX.Y.Z" \
-     --notes "Short description of what changed."
+     --notes "Short description of what changed." \
+     --latest
    ```
 
-5. **Verify** — open the repo's Releases page and confirm `main.js`,
-   `manifest.json`, and `styles.css` are listed as assets. BRAT users will be
-   notified of the update automatically.
+5. **Verify** — check both the Git tag and the GitHub Release:
+   ```bash
+   git ls-remote --tags origin "vX.Y.Z"
+   gh release list --limit 5
+   gh release view vX.Y.Z --json tagName,name,assets,isDraft,isPrerelease,url
+   ```
+   Confirm `vX.Y.Z` is listed as the latest GitHub Release and that `main.js`,
+   `manifest.json`, and `styles.css` are attached. BRAT users will be notified
+   of the update automatically.
 
 > `main.js` is in `.gitignore` and is never committed to the branch — it only
 > lives as a release asset.
