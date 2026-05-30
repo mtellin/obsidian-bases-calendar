@@ -422,6 +422,7 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       nowIndicator={true}
       scrollTime={scrollToTime}
       slotDuration={slotDuration}
+      slotEventOverlap={false}
       eventMinHeight={20}
       navLinks={false}
       events={events}

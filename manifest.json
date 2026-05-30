@@ -1,7 +1,7 @@
 {
 	"id": "bases-calendar",
 	"name": "Bases Calendar",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"minAppVersion": "1.10.0",
 	"description": "Adds a multi-view calendar layout to Obsidian Bases with Google Calendar colors and timed events.",
 	"author": "mtellin",

@@ -1,6 +1,6 @@
 {
 	"name": "bases-calendar",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "Multi-view calendar for Obsidian Bases with Google Calendar colors and timed events.",
 	"main": "main.js",
 	"scripts": {
