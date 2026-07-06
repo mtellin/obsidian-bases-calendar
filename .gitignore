@@ -1,3 +1,7 @@
 node_modules/
 main.js
 *.js.map
+
+# Test-vault churn: Obsidian UI state + build-copied styles (root styles.css is source)
+test-vault/.obsidian/workspace.json
+test-vault/.obsidian/plugins/bases-calendar/styles.css
