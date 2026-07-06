@@ -95,11 +95,27 @@ Available option types in `BasesAllOptions`: `property`, `dropdown`, `text`, `gr
 
 ## Making a BRAT release
 
-BRAT installs by downloading the three built artifacts from the latest GitHub
-release. A pushed Git tag is not enough; GitHub must also have a published
-Release for that tag with plugin assets attached.
+### Pre-release review (do this before bumping versions)
 
-Steps:
+Before tagging any release, **spawn a FRESH subagent with clean context** to
+review the release diff — do not review inline. The agent that wrote the code
+is anchored on its own intent; a clean-context reviewer re-derives from the
+diff alone and catches skipped assumptions.
+
+Run in order:
+1. `/security-review` — secrets/keys/personal paths in the diff.
+2. `/code-review high` — correctness + error states.
+
+Focus for a public Obsidian plugin (generic web-app checks like SQL/XSS mostly
+N/A):
+- No API keys, tokens, or personal absolute paths baked into committed source
+  or the built `main.js`.
+- What the plugin reads and sends: vault file access it shouldn't have, any
+  network calls / phone-home, secrets written to logs.
+
+Only proceed to the version bump + tag steps below once the review is clean.
+
+### Steps
 
 1. **Bump versions** in `manifest.json`, `package.json`, `package-lock.json`,
    and `versions.json`.
