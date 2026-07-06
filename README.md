@@ -3,9 +3,10 @@
 A calendar view for [Obsidian Bases](https://obsidian.md/bases) that displays your notes on an interactive calendar with multiple time views, Google Calendar–style event colors, and support for timed events.
 
 > [!NOTE]
-> This is a 100% vibe-coded plugin built for personal use. It is shared in
-> case it is useful to others, but it is not a polished or actively maintained
-> product. If you run into a problem, open an issue and I can try to address it.
+> This is 100% vibe-coded software built for personal use. It's shared in case
+> it's useful to others — no guarantees it fits your setup, but I use and
+> maintain it. If you run into a problem, open an issue and I'll try to address
+> it.
 
 ![Bases Calendar showing a work-week view with colored events](docs/preview.png)
 
