@@ -22,6 +22,7 @@ A calendar view for [Obsidian Bases](https://obsidian.md/bases) that displays yo
 - **Timed events** — notes with a date-and-time value render in the correct hourly slot; date-only notes stay all-day
 - **Detail property** — choose a secondary property (e.g. attendees, location) to display on the second line of each event
 - **Drag-to-reschedule** — drag events to update their date/time frontmatter properties directly
+- **Resize timed events** — drag the bottom edge to update an end date or a duration-in-minutes property
 - **Page Preview on hover** — hover over an event to preview the note without opening it
 
 ---
@@ -96,6 +97,7 @@ All options are configured through the **Properties** panel (gear icon) of a cal
 |--------|-----|-------------|
 | **Start date** *(required)* | `startDate` | The frontmatter property holding the event start date or datetime. |
 | **End date** *(optional)* | `endDate` | The frontmatter property holding the event end date or datetime. Multi-day events span across all covered days. |
+| **Duration in minutes** *(optional)* | `durationProperty` | A numeric frontmatter property used to size timed events when no end date is set. Resize writes the new number of minutes to this property. |
 
 ### Event display
 
@@ -142,7 +144,7 @@ The plugin reads the time component of Obsidian date properties:
 - **Date only** (`2026-06-10`) — rendered as an all-day event across the full day row.
 - **Date + time** (`2026-06-10T14:00`) — rendered in the correct hourly slot in time-grid views (Week, Work Week, 3-Day, Today).
 
-If both `startDate` and `endDate` have times, the event block spans the correct duration. All-day multi-day events (date-only start + date-only end) span across the covered days in the all-day row.
+If both `startDate` and `endDate` have times, the event block spans the correct duration. Alternatively, set `durationProperty` (for example, `note.duration_min`) to show a timed event for that many minutes without an end date. When both options are configured, the end date takes precedence. All-day multi-day events (date-only start + date-only end) span across the covered days in the all-day row.
 
 ---
 
@@ -154,6 +156,8 @@ When `startDate` (and optionally `endDate`) are note properties (frontmatter), e
 - Timed events write back as `YYYY-MM-DDTHH:mm`.
 
 Dragging is disabled when date properties come from computed or file-metadata sources (e.g. `file.ctime`).
+
+Timed events can also be resized by dragging their bottom edge. The new end time is written to `endDate` when it is configured; otherwise the new length is written to `durationProperty` as minutes. Resizing requires the target to be a frontmatter property. Date-only events cannot be resized.
 
 ---
 

@@ -12,3 +12,9 @@ views:
     colorProperty: note.color
     weekStartDay: monday
     scrollToTime: "08:00:00"
+  - type: calendar
+    name: Calendar by duration
+    startDate: note.date
+    durationProperty: note.duration_min
+    weekStartDay: monday
+    scrollToTime: "08:00:00"

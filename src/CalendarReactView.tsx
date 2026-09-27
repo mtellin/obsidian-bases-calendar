@@ -6,7 +6,7 @@ import type {
   ViewMountArg,
 } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin from "@fullcalendar/interaction";
+import interactionPlugin, { type EventResizeDoneArg } from "@fullcalendar/interaction";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { BasesEntry, BasesPropertyId, DateValue, Value } from "obsidian";
@@ -39,7 +39,9 @@ interface CalendarReactViewProps {
     newEnd?: Date,
     allDay?: boolean,
   ) => Promise<void>;
+  onEventResize?: (entry: BasesEntry, newStart: Date, newEnd: Date) => Promise<void>;
   editable: boolean;
+  resizeEditable: boolean;
   calendarHandleRef?: React.RefObject<CalendarHandle | null>;
 }
 
@@ -56,7 +58,9 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
   onEntryClick,
   onEntryContextMenu,
   onEventDrop,
+  onEventResize,
   editable,
+  resizeEditable,
   calendarHandleRef,
 }) => {
   const app = useApp();
@@ -121,6 +125,11 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
         adjustedEndDate = new Date(calEntry.endDate);
         adjustedEndDate.setDate(adjustedEndDate.getDate() + 1);
       }
+    }
+    if (!calEntry.allDay && !adjustedEndDate && calEntry.durationMinutes) {
+      adjustedEndDate = new Date(
+        calEntry.startDate.getTime() + calEntry.durationMinutes * 60_000,
+      );
     }
 
     return {
@@ -202,14 +211,19 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 
       const entry = dropInfo.event.extendedProps.entry as BasesEntry;
       const originalEndDate = dropInfo.event.extendedProps.originalEndDate as Date | undefined;
-      const allDay = dropInfo.event.extendedProps.allDay as boolean;
+      const allDay = dropInfo.event.allDay;
       const newStart = dropInfo.event.start;
       const newEnd = dropInfo.event.end;
 
-      if (!newStart) {
+      if (!newStart || !Number.isFinite(newStart.getTime())) {
         dropInfo.revert();
         return;
       }
+      if (
+        dropInfo.oldEvent.start?.getTime() === newStart.getTime() &&
+        dropInfo.oldEvent.allDay === allDay &&
+        dropInfo.oldEvent.end?.getTime() === newEnd?.getTime()
+      ) return;
 
       let actualEndDate: Date | undefined;
       if (originalEndDate) {
@@ -230,6 +244,27 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       }
     },
     [onEventDrop],
+  );
+
+  const handleEventResize = useCallback(
+    async (resizeInfo: EventResizeDoneArg) => {
+      const { event } = resizeInfo;
+      const { start, end } = event;
+      if (
+        !onEventResize || event.allDay || !start || !end ||
+        !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) ||
+        end.getTime() <= start.getTime()
+      ) {
+        resizeInfo.revert();
+        return;
+      }
+      try {
+        await onEventResize(event.extendedProps.entry as BasesEntry, start, end);
+      } catch {
+        resizeInfo.revert();
+      }
+    },
+    [onEventResize],
   );
 
   const hasNonEmptyValue = useCallback((value: Value): boolean => {
@@ -430,11 +465,12 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       eventClick={handleEventClick}
       eventMouseEnter={handleEventMouseEnter}
       eventDrop={(info) => void handleEventDrop(info)}
+      eventResize={(info) => void handleEventResize(info)}
       viewDidMount={handleViewDidMount}
       height="100%"
       fixedWeekCount={false}
       fixedMirrorParent={document.body ?? undefined}
-      eventDurationEditable={false}
+      eventDurationEditable={resizeEditable}
       editable={editable}
     />
   );

@@ -20,6 +20,7 @@ export interface CalendarEntry {
   entry: BasesEntry;
   startDate: Date;
   endDate?: Date;
+  durationMinutes?: number;
   allDay: boolean;
   backgroundColor?: string;
   borderColor?: string;
@@ -35,6 +36,7 @@ export class CalendarView extends BasesView {
   private entries: CalendarEntry[] = [];
   private startDateProp: BasesPropertyId | null = null;
   private endDateProp: BasesPropertyId | null = null;
+  private durationProp: BasesPropertyId | null = null;
   private colorProp: BasesPropertyId | null = null;
   private detailProp: BasesPropertyId | null = null;
   private weekStartDay: number = 1;
@@ -90,6 +92,7 @@ export class CalendarView extends BasesView {
   private loadConfig(): void {
     this.startDateProp = this.config.getAsPropertyId("startDate");
     this.endDateProp = this.config.getAsPropertyId("endDate");
+    this.durationProp = this.config.getAsPropertyId("durationProperty");
     this.colorProp = this.config.getAsPropertyId("colorProperty");
     this.detailProp = this.config.getAsPropertyId("detailProperty");
 
@@ -123,6 +126,9 @@ export class CalendarView extends BasesView {
         const endDate = this.endDateProp
           ? (this.extractDate(entry, this.endDateProp)?.date ?? undefined)
           : undefined;
+        const durationMinutes = this.durationProp
+          ? this.extractDuration(entry, this.durationProp)
+          : undefined;
 
         let colorProps: Pick<CalendarEntry, "backgroundColor" | "borderColor"> = {};
         if (this.colorProp) {
@@ -141,6 +147,7 @@ export class CalendarView extends BasesView {
           entry,
           startDate: result.date,
           endDate,
+          durationMinutes,
           allDay: !result.hasTimed,
           ...colorProps,
         });
@@ -182,7 +189,11 @@ export class CalendarView extends BasesView {
             onEventDrop={(entry, newStart, newEnd, allDay) =>
               this.updateEntryDates(entry, newStart, newEnd, allDay)
             }
+            onEventResize={(entry, newStart, newEnd) =>
+              this.updateEntryDuration(entry, newStart, newEnd)
+            }
             editable={this.isEditable()}
+            resizeEditable={this.isResizeEditable()}
             calendarHandleRef={this.calendarHandleRef}
           />
         </AppContext.Provider>
@@ -200,6 +211,23 @@ export class CalendarView extends BasesView {
     if (endDateProperty.type !== "note") return false;
 
     return true;
+  }
+
+  private isResizeEditable(): boolean {
+    if (!this.isEditable()) return false;
+    const property = this.endDateProp ?? this.durationProp;
+    return Boolean(property && parsePropertyId(property).type === "note");
+  }
+
+  private extractDuration(entry: BasesEntry, propId: BasesPropertyId): number | undefined {
+    try {
+      const value = entry.getValue(propId);
+      if (!value) return undefined;
+      const minutes = Number(value.toString());
+      return Number.isFinite(minutes) && minutes > 0 ? minutes : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private extractDate(
@@ -242,7 +270,12 @@ export class CalendarView extends BasesView {
     newEnd?: Date,
     allDay?: boolean,
   ): Promise<void> {
-    if (!this.startDateProp) return;
+    if (!this.startDateProp || !Number.isFinite(newStart.getTime())) {
+      throw new Error("Invalid event start date");
+    }
+    if (newEnd && !Number.isFinite(newEnd.getTime())) {
+      throw new Error("Invalid event end date");
+    }
 
     const file = entry.file;
     const extractedStartProp = this.startDateProp.startsWith("note.")
@@ -272,6 +305,25 @@ export class CalendarView extends BasesView {
     });
   }
 
+  private async updateEntryDuration(
+    entry: BasesEntry,
+    newStart: Date,
+    newEnd: Date,
+  ): Promise<void> {
+    const property = this.endDateProp ?? this.durationProp;
+    const field = property?.startsWith("note.") ? property.slice(5) : null;
+    const milliseconds = newEnd.getTime() - newStart.getTime();
+    if (!field || !Number.isFinite(milliseconds) || milliseconds < 60_000) {
+      throw new Error("Invalid event duration");
+    }
+
+    await this.app.fileManager.processFrontMatter(entry.file, (frontmatter) => {
+      frontmatter[field] = this.endDateProp
+        ? formatDateTime(newEnd)
+        : Math.round(milliseconds / 60_000);
+    });
+  }
+
   static getViewOptions(): BasesAllOptions[] {
     return [
       {
@@ -288,6 +340,12 @@ export class CalendarView extends BasesView {
             displayName: "End date (optional)",
             type: "property",
             key: "endDate",
+            placeholder: "Property",
+          },
+          {
+            displayName: "Duration in minutes (optional)",
+            type: "property",
+            key: "durationProperty",
             placeholder: "Property",
           },
         ],
