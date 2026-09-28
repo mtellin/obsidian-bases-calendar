@@ -155,6 +155,8 @@ When `startDate` (and optionally `endDate`) are note properties (frontmatter), e
 
 Dragging is disabled when date properties come from computed or file-metadata sources (e.g. `file.ctime`).
 
+On phones, draggable events show a dotted handle on the left. Hold and drag that handle to move an event; tapping the rest of the event or its links still opens them. Desktop and tablet dragging stays on the whole event.
+
 ---
 
 ## View modes

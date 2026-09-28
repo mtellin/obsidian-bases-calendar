@@ -3,13 +3,14 @@ import type {
   EventClickArg,
   EventContentArg,
   EventDropArg,
+  EventMountArg,
   ViewMountArg,
 } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
-import { BasesEntry, BasesPropertyId, DateValue, Value } from "obsidian";
+import { BasesEntry, BasesPropertyId, DateValue, Platform, Value } from "obsidian";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarEntry } from "./calendar-view";
@@ -61,6 +62,12 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 }) => {
   const app = useApp();
   const calendarRef = useRef<FullCalendar>(null);
+  const [activeView, setActiveView] = useState(initialView);
+  const [moveMode, setMoveMode] = useState(false);
+  const moveModeRef = useRef(moveMode);
+  moveModeRef.current = moveMode;
+  const lastLongPressRef = useRef<{ path: string; at: number } | null>(null);
+  const eventListenersRef = useRef(new WeakMap<HTMLElement, () => void>());
   const [slotDuration, setSlotDuration] = useState(initialSlotDuration);
   const slotDurationRef = useRef(initialSlotDuration);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,18 +152,20 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       const entry = clickInfo.event.extendedProps.entry as BasesEntry;
       const isModEvent = clickInfo.jsEvent.ctrlKey || clickInfo.jsEvent.metaKey;
 
+      const lastLongPress = lastLongPressRef.current;
+      if (moveMode || (lastLongPress?.path === entry.file.path && Date.now() - lastLongPress.at < 1000)) {
+        clickInfo.jsEvent.preventDefault();
+        return;
+      }
       if (target.closest("a.tag")) return;
       if (target.closest(".internal-link")) return;
       const clickedExternal = target.closest("a.external-link") as HTMLAnchorElement | undefined;
       if (clickedExternal?.href) return;
-
       clickInfo.jsEvent.preventDefault();
       onEntryClick(entry, isModEvent);
     },
-    [app, onEntryClick],
+    [onEntryClick, moveMode],
   );
-
-  const contextMenuListenersRef = useRef(new WeakMap<HTMLElement, (evt: Event) => void>());
 
   const handleEventMouseEnter = useCallback(
     (mouseEnterInfo: { event: EventApi; el: HTMLElement; jsEvent: MouseEvent }) => {
@@ -173,24 +182,8 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
         });
       }
 
-      const prevHandler = contextMenuListenersRef.current.get(el);
-      if (prevHandler) el.removeEventListener("contextmenu", prevHandler);
-
-      const contextMenuHandler = (evt: Event) => {
-        evt.preventDefault();
-        const syntheticEvent = {
-          nativeEvent: evt as MouseEvent,
-          currentTarget: el,
-          target: evt.target as HTMLElement,
-          preventDefault: () => evt.preventDefault(),
-          stopPropagation: () => evt.stopPropagation(),
-        } as unknown as React.MouseEvent;
-        onEntryContextMenu(syntheticEvent, entry);
-      };
-      contextMenuListenersRef.current.set(el, contextMenuHandler);
-      el.addEventListener("contextmenu", contextMenuHandler);
     },
-    [app, onEntryContextMenu],
+    [app],
   );
 
   const handleEventDrop = useCallback(
@@ -202,14 +195,19 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 
       const entry = dropInfo.event.extendedProps.entry as BasesEntry;
       const originalEndDate = dropInfo.event.extendedProps.originalEndDate as Date | undefined;
-      const allDay = dropInfo.event.extendedProps.allDay as boolean;
+      const allDay = dropInfo.event.allDay;
       const newStart = dropInfo.event.start;
       const newEnd = dropInfo.event.end;
 
-      if (!newStart) {
+      if (!newStart || !Number.isFinite(newStart.getTime())) {
         dropInfo.revert();
         return;
       }
+      if (
+        dropInfo.oldEvent.start?.getTime() === newStart.getTime() &&
+        dropInfo.oldEvent.allDay === allDay &&
+        dropInfo.oldEvent.end?.getTime() === newEnd?.getTime()
+      ) return;
 
       let actualEndDate: Date | undefined;
       if (originalEndDate) {
@@ -368,14 +366,16 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 
       return (
         <div className="bases-calendar-event-content">
-          <div className="bases-calendar-event-title">
-            {titleProp
-              ? <ListPropertyValue value={titleProp.value} maxItems={1} />
-              : entry.file.basename}
+          <div className="bases-calendar-event-details">
+            <div className="bases-calendar-event-title">
+              {titleProp
+                ? <ListPropertyValue value={titleProp.value} maxItems={1} />
+                : entry.file.basename}
+            </div>
+            {detailNode && (
+              <div className="bases-calendar-event-properties">{detailNode}</div>
+            )}
           </div>
-          {detailNode && (
-            <div className="bases-calendar-event-properties">{detailNode}</div>
-          )}
         </div>
       );
     },
@@ -384,12 +384,98 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
 
   const handleViewDidMount = useCallback(
     (arg: ViewMountArg) => {
+      setActiveView(arg.view.type);
+      setMoveMode(false);
       onViewChange(arg.view.type);
     },
     [onViewChange],
   );
 
+  const handleEventDidMount = useCallback((info: EventMountArg) => {
+    const el = info.el;
+    const entry = info.event.extendedProps.entry as BasesEntry;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let startX = 0;
+    let startY = 0;
+
+    const clearTimer = () => {
+      if (longPressTimer !== null) clearTimeout(longPressTimer);
+      longPressTimer = null;
+    };
+    const showMenu = (evt: MouseEvent) => {
+      evt.preventDefault();
+      if (Platform.isPhone) evt.stopImmediatePropagation();
+      clearTimer();
+      if (Platform.isPhone && moveModeRef.current) return;
+      const previous = lastLongPressRef.current;
+      if (previous?.path === entry.file.path && Date.now() - previous.at < 1000 && evt.isTrusted) return;
+      if (Platform.isPhone) {
+        lastLongPressRef.current = { path: entry.file.path, at: Date.now() };
+      }
+      const syntheticEvent = {
+        nativeEvent: evt,
+        currentTarget: el,
+        target: evt.target as HTMLElement,
+        preventDefault: () => evt.preventDefault(),
+        stopPropagation: () => evt.stopPropagation(),
+      } as unknown as React.MouseEvent;
+      onEntryContextMenu(syntheticEvent, entry);
+    };
+    const onPointerDown = (evt: PointerEvent) => {
+      if (!Platform.isPhone || moveModeRef.current || evt.pointerType !== "touch") return;
+      clearTimer();
+      startX = evt.clientX;
+      startY = evt.clientY;
+      longPressTimer = setTimeout(() => {
+        // Open the event's own menu without dispatching a bubbling contextmenu
+        // to links inside the event or the Obsidian/Bases view.
+        showMenu(evt);
+      }, 600);
+    };
+    const onPointerMove = (evt: PointerEvent) => {
+      if (Math.hypot(evt.clientX - startX, evt.clientY - startY) > 10) clearTimer();
+    };
+    const onClickCapture = (evt: MouseEvent) => {
+      const previous = lastLongPressRef.current;
+      if (previous?.path === entry.file.path && Date.now() - previous.at < 1000) {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+      }
+    };
+    el.addEventListener("contextmenu", showMenu, true);
+    el.addEventListener("click", onClickCapture, true);
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", clearTimer);
+    el.addEventListener("pointercancel", clearTimer);
+    eventListenersRef.current.set(el, () => {
+      clearTimer();
+      el.removeEventListener("contextmenu", showMenu, true);
+      el.removeEventListener("click", onClickCapture, true);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", clearTimer);
+      el.removeEventListener("pointercancel", clearTimer);
+    });
+  }, [onEntryContextMenu]);
+
+  const handleEventWillUnmount = useCallback((info: EventMountArg) => {
+    eventListenersRef.current.get(info.el)?.();
+    eventListenersRef.current.delete(info.el);
+  }, []);
+
   return (
+    <div className={`bases-calendar-react-shell${Platform.isPhone && activeView === "threeDay" ? " bases-calendar-three-day" : ""}`}>
+      {Platform.isPhone && editable && activeView === "threeDay" && (
+        <button
+          type="button"
+          className="bases-calendar-move-mode-button"
+          aria-pressed={moveMode}
+          onClick={() => setMoveMode((current) => !current)}
+        >
+          {moveMode ? "Zakończ przesuwanie" : "Przesuwaj spotkania"}
+        </button>
+      )}
     <FullCalendar
       ref={calendarRef}
       plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -423,20 +509,26 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       scrollTime={scrollToTime}
       slotDuration={slotDuration}
       slotEventOverlap={false}
-      eventMinHeight={20}
+      eventMinHeight={Platform.isPhone && activeView === "threeDay" ? 44 : 20}
       navLinks={false}
       events={events}
       eventContent={renderEventContent}
+      eventClassNames={Platform.isPhone && moveMode ? ["bases-calendar-phone-moving"] : []}
+      eventDidMount={handleEventDidMount}
+      eventWillUnmount={handleEventWillUnmount}
       eventClick={handleEventClick}
       eventMouseEnter={handleEventMouseEnter}
-      eventDrop={(info) => void handleEventDrop(info)}
+      eventDrop={(info) => {
+        void handleEventDrop(info).finally(() => setMoveMode(false));
+      }}
       viewDidMount={handleViewDidMount}
       height="100%"
       fixedWeekCount={false}
       fixedMirrorParent={document.body ?? undefined}
       eventDurationEditable={false}
-      editable={editable}
+      editable={editable && (!Platform.isPhone || (activeView === "threeDay" && moveMode))}
     />
+    </div>
   );
 };
 

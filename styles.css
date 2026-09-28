@@ -23,6 +23,188 @@ body {
   min-height: 500px;
 }
 
+.bases-calendar-react-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bases-calendar-react-shell > .fc {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.is-phone .bases-calendar-move-mode-button {
+  align-self: flex-end;
+  min-height: 44px;
+  margin: 0 4px 4px;
+  padding: 0 12px;
+}
+
+body.is-phone .bases-calendar-move-mode-button[aria-pressed="true"] {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+body.is-phone .bases-calendar-phone-moving {
+  cursor: grab;
+  touch-action: none;
+}
+
+body.is-phone .bases-calendar-phone-moving a {
+  pointer-events: none;
+}
+
+body.is-phone .bases-calendar-three-day .fc-timegrid-slot {
+  height: 44px;
+}
+
+body.is-phone .bases-calendar-three-day .fc-daygrid-event {
+  min-height: 44px;
+}
+
+.bases-calendar-date-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.bases-calendar-date-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 5px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.bases-calendar-date-shortcut.is-selected {
+  background-color: var(--background-modifier-hover);
+}
+
+.bases-calendar-date-shortcut:focus-visible {
+  outline: 2px solid var(--text-muted);
+  outline-offset: 2px;
+}
+
+.bases-calendar-date-shortcut-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.bases-calendar-date-shortcut-value {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.bases-calendar-date-shortcut-value.is-weekend {
+  color: var(--text-warning);
+}
+
+.bases-calendar-date-shortcut-check {
+  display: inline-flex;
+  visibility: hidden;
+  color: var(--text-normal);
+}
+
+.bases-calendar-date-shortcut.is-selected .bases-calendar-date-shortcut-check {
+  visibility: visible;
+}
+
+.bases-calendar-date-shortcut-check svg {
+  width: 12px;
+  height: 12px;
+}
+
+.bases-calendar-reschedule-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  margin-bottom: 2px;
+  overflow-wrap: anywhere;
+}
+
+.bases-calendar-reschedule-entity-icon {
+  display: inline-flex;
+  flex: none;
+  align-self: baseline;
+}
+
+.bases-calendar-reschedule-entity-icon svg {
+  width: 0.8em;
+  height: 0.8em;
+}
+
+.bases-calendar-weekend-notice {
+  margin-top: 4px;
+  color: var(--text-warning);
+  font-size: var(--font-ui-smaller);
+}
+
+.bases-calendar-reschedule-modal input[type="date"].is-weekend,
+.bases-calendar-reschedule-modal input[type="date"].is-weekend::-webkit-datetime-edit {
+  color: var(--text-warning);
+}
+
+.bases-calendar-reschedule-subtitle {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+}
+
+body.is-phone .bases-calendar-reschedule-modal .setting-item {
+  padding: 8px 0;
+}
+
+body.is-phone .bases-calendar-reschedule-modal .setting-item-control input,
+body.is-phone .bases-calendar-reschedule-modal .setting-item-control button {
+  border-radius: var(--radius-m);
+}
+
+body.is-phone .bases-calendar-reschedule-modal .setting-item-control input {
+  min-height: 44px;
+}
+
+body.is-phone .bases-calendar-reschedule-modal .setting-item-control input[type="time"] {
+  background-color: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: none;
+  color: var(--text-normal);
+}
+
+body.is-phone .bases-calendar-reschedule-modal input[type="time"]::-webkit-datetime-edit,
+body.is-phone .bases-calendar-reschedule-modal input[type="time"]::-webkit-datetime-edit-hour-field,
+body.is-phone .bases-calendar-reschedule-modal input[type="time"]::-webkit-datetime-edit-minute-field {
+  color: var(--text-normal);
+}
+
+body.is-phone .bases-calendar-reschedule-modal input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+body.is-phone .bases-calendar-reschedule-modal input[type="time"]::-webkit-datetime-edit-minute-field:focus {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+body.is-phone .bases-calendar-reschedule-modal input[type="time"]:focus-visible {
+  outline: 2px solid var(--text-muted);
+  outline-offset: 2px;
+}
+
+body.is-phone .bases-calendar-reschedule-modal .bases-calendar-reschedule-actions {
+  margin-top: 8px;
+}
+
 /* Embedded in a markdown note: parent has no intrinsic height, so use the
    CSS variable (default 600px) to give the container a defined size. */
 .markdown-rendered .bases-calendar-container {
@@ -298,6 +480,12 @@ body {
   overflow: hidden;
   min-width: 0;
   max-width: 100%;
+}
+
+.bases-calendar-event-details {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .bases-calendar-event-title {

@@ -5,8 +5,13 @@ import {
   BasesView,
   DateValue,
   Menu,
+  Modal,
+  Notice,
+  Platform,
+  Setting,
   parsePropertyId,
   QueryController,
+  setIcon,
 } from "obsidian";
 import React, { StrictMode } from "react";
 import { createRoot, Root } from "react-dom/client";
@@ -224,8 +229,58 @@ export class CalendarView extends BasesView {
 
   private showEntryContextMenu(evt: MouseEvent, entry: BasesEntry): void {
     const file = entry.file;
+    const calendarEntry = this.entries.find((item) => item.entry.file.path === file.path);
+    if (Platform.isPhone) {
+      // A shared context menu also receives actions for links rendered inside the
+      // event. A private menu keeps this menu about the event's own note.
+      const menu = new Menu();
+      if (this.isEditable() && calendarEntry) {
+        menu.addItem((item) =>
+          item
+            .setSection("reschedule")
+            .setTitle("Zmień termin")
+            .setIcon("calendar-clock")
+            .onClick(() => {
+              new RescheduleModal(this.app, calendarEntry, (start, end, allDay) =>
+                this.updateEntryDates(entry, start, end, allDay),
+              ).open();
+            }),
+        );
+        menu.addSeparator();
+      }
+      menu.addItem((item) =>
+        item
+          .setSection("navigation")
+          .setTitle("Otwórz notatkę")
+          .setIcon("file-text")
+          .onClick(() => void this.app.workspace.openLinkText(file.path, "", false)),
+      );
+      menu.addItem((item) =>
+        item
+          .setSection("navigation")
+          .setTitle("Otwórz w nowej karcie")
+          .setIcon("file-plus")
+          .onClick(() => void this.app.workspace.openLinkText(file.path, "", true)),
+      );
+      menu.showAtMouseEvent(evt);
+      return;
+    }
+
     const menu = Menu.forEvent(evt);
     this.app.workspace.handleLinkContextMenu(menu, file.path, "");
+    if (this.isEditable() && calendarEntry) {
+      menu.addItem((item) =>
+        item
+          .setSection("action")
+          .setTitle("Zmień termin")
+          .setIcon("calendar-clock")
+          .onClick(() => {
+            new RescheduleModal(this.app, calendarEntry, (start, end, allDay) =>
+              this.updateEntryDates(entry, start, end, allDay),
+            ).open();
+          }),
+      );
+    }
     menu.addItem((item) =>
       item
         .setSection("danger")
@@ -242,7 +297,7 @@ export class CalendarView extends BasesView {
     newEnd?: Date,
     allDay?: boolean,
   ): Promise<void> {
-    if (!this.startDateProp) return;
+    if (!this.startDateProp) throw new Error("Start date is not configured");
 
     const file = entry.file;
     const extractedStartProp = this.startDateProp.startsWith("note.")
@@ -256,7 +311,7 @@ export class CalendarView extends BasesView {
       extractedStartProp === null ||
       (this.endDateProp && extractedEndProp === null)
     ) {
-      return;
+      throw new Error("Date properties are not editable note properties");
     }
 
     await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
@@ -347,6 +402,202 @@ export class CalendarView extends BasesView {
       },
     ];
   }
+}
+
+class RescheduleModal extends Modal {
+  constructor(
+    app: CalendarView["app"],
+    private readonly calendarEntry: CalendarEntry,
+    private readonly onSave: (start: Date, end: Date | undefined, allDay: boolean) => Promise<void>,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    const { startDate, endDate, allDay } = this.calendarEntry;
+    this.modalEl.addClass("bases-calendar-reschedule-modal");
+    contentEl.empty();
+    const file = this.calendarEntry.entry.file;
+    let title = file.basename;
+    const cachedTitle = this.app.metadataCache.getFileCache(file)?.frontmatter?.title;
+    if (typeof cachedTitle === "string" && cachedTitle.trim()) title = cachedTitle.trim();
+    try {
+      const value = this.calendarEntry.entry.getValue("note.title");
+      if (value?.isTruthy()) title = value.toString().trim() || title;
+    } catch {
+      // Keep the file name when this Base does not expose note.title.
+    }
+    const heading = contentEl.createEl("h2", { cls: "bases-calendar-reschedule-title" });
+    const iconName = typeof this.app.metadataCache.getFileCache(file)?.frontmatter?.icon === "string"
+      ? String(this.app.metadataCache.getFileCache(file)?.frontmatter?.icon).replace(/^lucide[-/:]+/, "").trim()
+      : "";
+    if (iconName) {
+      const icon = heading.createSpan({ cls: "bases-calendar-reschedule-entity-icon", attr: { "aria-hidden": "true" } });
+      setIcon(icon, iconName);
+      if (!icon.querySelector("svg")) icon.remove();
+    }
+    heading.createSpan({ text: title });
+    contentEl.createEl("p", { text: "Zmień termin", cls: "bases-calendar-reschedule-subtitle" });
+
+    let dateInput!: HTMLInputElement;
+    let timeInput: HTMLInputElement;
+    let selectedAllDay = allDay;
+    new Setting(contentEl).setName("Data").addText((text) => {
+      dateInput = text.inputEl;
+      dateInput.type = "date";
+      dateInput.value = formatDate(startDate);
+      dateInput.setAttribute("aria-label", "Nowa data");
+    });
+    const weekendNotice = contentEl.createDiv({
+      cls: "bases-calendar-weekend-notice",
+      attr: { role: "status", "aria-live": "polite" },
+    });
+    const shortcuts = contentEl.createDiv({
+      cls: "bases-calendar-date-shortcuts",
+      attr: { role: "group", "aria-label": "Szybki wybór daty" },
+    });
+    const shortcutButtons: { day: string; button: HTMLButtonElement }[] = [];
+    const syncDateState = () => {
+      for (const { day, button } of shortcutButtons) {
+        const selected = dateInput.value === day;
+        button.setAttribute("aria-pressed", String(selected));
+        button.toggleClass("is-selected", selected);
+      }
+      const selectedDate = parseLocalDate(dateInput.value, undefined, true);
+      const weekday = selectedDate?.getDay();
+      const isWeekend = weekday === 0 || weekday === 6;
+      dateInput.toggleClass("is-weekend", isWeekend);
+      weekendNotice.hidden = !isWeekend;
+      weekendNotice.setText(isWeekend
+        ? `${weekday === 6 ? "Sobota" : "Niedziela"} — termin wypada w weekend`
+        : "");
+    };
+    for (const [label, days] of [
+      ["Jutro", 1],
+      ["Pojutrze", 2],
+      ["Za tydzień", 7],
+    ] as const) {
+      const target = new Date();
+      target.setDate(target.getDate() + days);
+      const day = formatDate(target);
+      const weekday = target.getDay();
+      const isWeekend = weekday === 0 || weekday === 6;
+      const dateLabel = target.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit" });
+      const weekdayLabel = weekday === 6 ? "sob." : "niedz.";
+      const button = shortcuts.createEl("button", {
+        cls: "bases-calendar-date-shortcut",
+        attr: {
+          type: "button",
+          "aria-label": `${label}, ${target.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`,
+          "aria-pressed": "false",
+        },
+      });
+      const labelRow = button.createSpan({ cls: "bases-calendar-date-shortcut-label" });
+      labelRow.createSpan({ text: label });
+      const check = labelRow.createSpan({ cls: "bases-calendar-date-shortcut-check", attr: { "aria-hidden": "true" } });
+      setIcon(check, "check");
+      button.createSpan({
+        text: isWeekend ? `${weekdayLabel} ${dateLabel}` : dateLabel,
+        cls: `bases-calendar-date-shortcut-value${isWeekend ? " is-weekend" : ""}`,
+      });
+      button.addEventListener("click", () => {
+        dateInput.value = day;
+        dateInput.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      shortcutButtons.push({ day, button });
+    }
+    dateInput.addEventListener("input", syncDateState);
+    dateInput.addEventListener("change", syncDateState);
+    syncDateState();
+    new Setting(contentEl).setName("Cały dzień").addToggle((toggle) => {
+      toggle.setValue(allDay).onChange((value) => {
+        selectedAllDay = value;
+        timeInput.disabled = value;
+      });
+    });
+    new Setting(contentEl).setName("Godzina").addText((text) => {
+      timeInput = text.inputEl;
+      timeInput.type = "time";
+      timeInput.value = allDay ? "09:00" : formatTime(startDate);
+      timeInput.disabled = allDay;
+      timeInput.setAttribute("aria-label", "Nowa godzina");
+    });
+
+    new Setting(contentEl).setClass("bases-calendar-reschedule-actions")
+      .addButton((button) =>
+        button.setButtonText("Anuluj").onClick(() => this.close()),
+      )
+      .addButton((button) =>
+        button
+          .setButtonText("Zapisz")
+          .setCta()
+          .onClick(async () => {
+            const nextStart = parseLocalDate(dateInput.value, timeInput.value, selectedAllDay);
+            if (!nextStart) {
+              new Notice("Wybierz poprawną datę i godzinę");
+              return;
+            }
+            const nextEnd = shiftEndDate(startDate, endDate, nextStart, allDay);
+            button.setDisabled(true);
+            try {
+              await this.onSave(nextStart, nextEnd, selectedAllDay);
+              this.close();
+              new Notice("Termin zmieniony");
+            } catch (error) {
+              console.error("Could not reschedule calendar entry:", error);
+              new Notice("Nie udało się zmienić terminu");
+              button.setDisabled(false);
+            }
+          }),
+      );
+  }
+}
+
+function formatTime(date: Date): string {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function parseLocalDate(day: string, time: string | undefined, allDay: boolean): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) return null;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText) - 1;
+  const date = Number(dayText);
+  let hour = 0;
+  let minute = 0;
+  if (!allDay) {
+    const timeMatch = /^(\d{2}):(\d{2})$/.exec(time ?? "");
+    if (!timeMatch) return null;
+    hour = Number(timeMatch[1]);
+    minute = Number(timeMatch[2]);
+  }
+  const result = new Date(year, month, date, hour, minute);
+  if (
+    result.getFullYear() !== year ||
+    result.getMonth() !== month ||
+    result.getDate() !== date ||
+    result.getHours() !== hour ||
+    result.getMinutes() !== minute
+  ) return null;
+  return result;
+}
+
+function shiftEndDate(
+  oldStart: Date,
+  oldEnd: Date | undefined,
+  newStart: Date,
+  allDay: boolean,
+): Date | undefined {
+  if (!oldEnd) return undefined;
+  if (!allDay) return new Date(newStart.getTime() + oldEnd.getTime() - oldStart.getTime());
+  const oldStartDay = Date.UTC(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate());
+  const oldEndDay = Date.UTC(oldEnd.getFullYear(), oldEnd.getMonth(), oldEnd.getDate());
+  const dayOffset = Math.round((oldEndDay - oldStartDay) / 86_400_000);
+  const newEnd = new Date(newStart);
+  newEnd.setDate(newEnd.getDate() + dayOffset);
+  return newEnd;
 }
 
 function formatDate(date: Date): string {
